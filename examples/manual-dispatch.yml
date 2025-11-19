@@ -1,0 +1,52 @@
+# Manual Workflow Dispatch Example
+# Allows manual triggering with custom inputs from GitHub Actions UI
+
+name: Manual Coval Evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent_id:
+        description: "Agent ID (22 characters)"
+        required: true
+        type: string
+      persona_id:
+        description: "Persona ID (22 characters)"
+        required: true
+        type: string
+      test_set_id:
+        description: "Test Set ID (8 characters)"
+        required: true
+        type: string
+      iteration_count:
+        description: "Number of times to run each test (1-10)"
+        required: false
+        default: "1"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "5"
+          - "10"
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Evaluation
+        id: coval
+        uses: coval-ai/coval-github-action@v1
+        env:
+          COVAL_API_KEY: ${{ secrets.COVAL_API_KEY }}
+        with:
+          agent_id: ${{ inputs.agent_id }}
+          persona_id: ${{ inputs.persona_id }}
+          test_set_id: ${{ inputs.test_set_id }}
+          iteration_count: ${{ inputs.iteration_count }}
+
+      - name: Display Results
+        run: |
+          echo "Run ID: ${{ steps.coval.outputs.run_id }}"
+          echo "Status: ${{ steps.coval.outputs.status }}"
+          echo "View Results: ${{ steps.coval.outputs.run_url }}"

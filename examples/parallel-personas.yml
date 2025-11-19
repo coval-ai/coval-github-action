@@ -1,0 +1,62 @@
+# Parallel Persona Testing Example
+# Tests the same agent with multiple personas in parallel using matrix strategy
+
+name: Multi-Persona Testing
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * 1'  # Every Monday at noon
+
+jobs:
+  parallel-persona-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # Continue testing other personas even if one fails
+      matrix:
+        persona:
+          - id: "friendlyPersona123456"
+            name: "Friendly Customer"
+            description: "Polite and cooperative user"
+          - id: "frustratedPersona1234"
+            name: "Frustrated Customer"
+            description: "Impatient and demanding user"
+          - id: "technicalPersona12345"
+            name: "Technical Customer"
+            description: "Detail-oriented tech-savvy user"
+          - id: "confusedPersona123456"
+            name: "Confused Customer"
+            description: "Needs extra guidance and clarification"
+
+    name: Test with ${{ matrix.persona.name }}
+
+    steps:
+      - name: Evaluate with ${{ matrix.persona.name }}
+        id: coval
+        uses: coval-ai/coval-github-action@v1
+        env:
+          COVAL_API_KEY: ${{ secrets.COVAL_API_KEY }}
+        with:
+          agent_id: "gk3jK9mPq2xRt5vW8yZaBc"
+          persona_id: ${{ matrix.persona.id }}
+          test_set_id: "aB1cD2eF"
+          iteration_count: 2
+          metadata: '{"persona_name": "${{ matrix.persona.name }}", "persona_type": "${{ matrix.persona.description }}"}'
+
+      - name: Log Results
+        run: |
+          echo "Persona: ${{ matrix.persona.name }}"
+          echo "Status: ${{ steps.coval.outputs.status }}"
+          echo "Results: ${{ steps.coval.outputs.run_url }}"
+
+  aggregate-results:
+    needs: parallel-persona-test
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Notify Team
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.log('All persona tests completed');
+            console.log('Check individual job results for details');

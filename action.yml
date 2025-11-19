@@ -1,0 +1,99 @@
+name: Coval Run Evaluation
+description: Launch and monitor AI agent evaluation runs using the Coval v1 Runs API
+author: Coval
+branding:
+  icon: "play-circle"
+  color: "blue"
+
+inputs:
+  agent_id:
+    description: "The agent ID to test (22 character identifier)"
+    required: true
+  persona_id:
+    description: "The simulated persona ID to use for testing (22 character identifier)"
+    required: true
+  test_set_id:
+    description: "The test set ID containing test cases to run (8 character identifier)"
+    required: true
+  metric_ids:
+    description: "Optional JSON array of metric IDs to evaluate (e.g., [\"metricId1\", \"metricId2\"]). If not provided, uses agent's default metrics."
+    required: false
+  iteration_count:
+    description: "Number of times to run each test case (1-10)"
+    required: false
+    default: "1"
+  concurrency:
+    description: "Number of simulations to run concurrently (1-5)"
+    required: false
+    default: "1"
+  metadata:
+    description: "Optional JSON object for custom metadata (e.g., {\"campaign_id\": \"q4_2025\", \"created_by\": \"ci/cd\"})"
+    required: false
+  max_wait_time:
+    description: "Maximum time to wait for run completion in seconds"
+    required: false
+    default: "600"
+  check_interval:
+    description: "Interval between status checks in seconds"
+    required: false
+    default: "30"
+  api_base_url:
+    description: "Base URL for the Coval API"
+    required: false
+    default: "https://api.coval.dev/v1"
+
+outputs:
+  run_id:
+    description: "The unique identifier of the launched run"
+    value: ${{ steps.run-evaluation.outputs.run_id }}
+  status:
+    description: "Final status of the run (COMPLETED, FAILED, etc.)"
+    value: ${{ steps.run-evaluation.outputs.status }}
+  run_url:
+    description: "URL to view the run in Coval dashboard"
+    value: ${{ steps.run-evaluation.outputs.run_url }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout Coval Action
+      uses: actions/checkout@v4
+      with:
+        repository: coval-ai/coval-github-action
+        path: .coval-action
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r .coval-action/requirements.txt
+
+    - name: Run Evaluation
+      id: run-evaluation
+      shell: bash
+      env:
+        COVAL_API_KEY: ${{ env.COVAL_API_KEY }}
+        AGENT_ID: ${{ inputs.agent_id }}
+        PERSONA_ID: ${{ inputs.persona_id }}
+        TEST_SET_ID: ${{ inputs.test_set_id }}
+        METRIC_IDS: ${{ inputs.metric_ids }}
+        ITERATION_COUNT: ${{ inputs.iteration_count }}
+        CONCURRENCY: ${{ inputs.concurrency }}
+        METADATA: ${{ inputs.metadata }}
+        MAX_WAIT_TIME: ${{ inputs.max_wait_time }}
+        CHECK_INTERVAL: ${{ inputs.check_interval }}
+        API_BASE_URL: ${{ inputs.api_base_url }}
+      run: |
+        echo "Launching Coval evaluation run..."
+        python .coval-action/launch_run.py
+
+    - name: Cleanup
+      if: always()
+      shell: bash
+      run: |
+        rm -rf .coval-action

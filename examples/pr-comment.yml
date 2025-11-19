@@ -1,0 +1,88 @@
+# PR Comment Example
+# Runs evaluation on PR and posts results as a comment
+
+name: PR Evaluation with Comment
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  evaluate-and-comment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Coval Evaluation
+        id: coval
+        uses: coval-ai/coval-github-action@v1
+        env:
+          COVAL_API_KEY: ${{ secrets.COVAL_API_KEY }}
+        with:
+          agent_id: "gk3jK9mPq2xRt5vW8yZaBc"
+          persona_id: "hL4kL0nQr3ySt6vX9zAcDd"
+          test_set_id: "aB1cD2eF"
+          metadata: '{"pr_number": "${{ github.event.pull_request.number }}", "pr_author": "${{ github.event.pull_request.user.login }}"}'
+
+      - name: Comment Evaluation Results on PR
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const status = '${{ steps.coval.outputs.status }}';
+            const runId = '${{ steps.coval.outputs.run_id }}';
+            const runUrl = '${{ steps.coval.outputs.run_url }}';
+
+            const statusEmoji = {
+              'COMPLETED': '✅',
+              'FAILED': '❌',
+              'CANCELLED': '🚫',
+              'PENDING': '⏳'
+            };
+
+            const emoji = statusEmoji[status] || '⚠️';
+
+            const body = `## ${emoji} Coval Evaluation Results
+
+            **Status:** ${status}
+            **Run ID:** \`${runId}\`
+
+            [View detailed results in Coval Dashboard →](${runUrl})
+
+            ---
+            <sub>Evaluation triggered by commit ${context.sha.substring(0, 7)}</sub>`;
+
+            // Find existing comment to update or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Coval Evaluation Results')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      - name: Fail Workflow on Failed Evaluation
+        if: steps.coval.outputs.status == 'FAILED'
+        run: |
+          echo "Coval evaluation failed. See results: ${{ steps.coval.outputs.run_url }}"
+          exit 1

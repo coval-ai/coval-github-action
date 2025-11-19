@@ -1,0 +1,57 @@
+# Scheduled Regression Testing Example
+# Runs comprehensive tests on a schedule with higher iteration count
+
+name: Nightly Regression Tests
+
+on:
+  schedule:
+    # Run at 2 AM UTC every day
+    - cron: '0 2 * * *'
+  # Allow manual trigger for immediate regression testing
+  workflow_dispatch:
+
+jobs:
+  regression-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Comprehensive Regression Tests
+        id: coval
+        uses: coval-ai/coval-github-action@v1
+        env:
+          COVAL_API_KEY: ${{ secrets.COVAL_API_KEY }}
+        with:
+          agent_id: "gk3jK9mPq2xRt5vW8yZaBc"
+          persona_id: "hL4kL0nQr3ySt6vX9zAcDd"
+          test_set_id: "regrTest"  # Use regression test set
+          # Run each test 5 times for statistical significance
+          iteration_count: 5
+          # Higher concurrency for faster completion
+          concurrency: 3
+          # Extended timeout for comprehensive testing
+          max_wait_time: 1800  # 30 minutes
+          metadata: '{"test_type": "regression", "scheduled": "true", "date": "${{ github.event.repository.updated_at }}"}'
+
+      - name: Report Results
+        if: always()
+        run: |
+          echo "==================================="
+          echo "Regression Test Results"
+          echo "==================================="
+          echo "Run ID: ${{ steps.coval.outputs.run_id }}"
+          echo "Status: ${{ steps.coval.outputs.status }}"
+          echo "Results: ${{ steps.coval.outputs.run_url }}"
+          echo "==================================="
+
+      - name: Notify on Failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Create an issue for failed regression test
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Regression Test Failed - ${new Date().toISOString().split('T')[0]}`,
+              body: `Nightly regression test failed.\n\nRun ID: ${{ steps.coval.outputs.run_id }}\nResults: ${{ steps.coval.outputs.run_url }}`,
+              labels: ['regression-failure', 'automated']
+            });

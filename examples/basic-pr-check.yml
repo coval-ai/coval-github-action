@@ -1,0 +1,21 @@
+# Basic PR Check Example
+# Automatically runs Coval evaluation on every pull request to main
+
+name: Coval PR Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  evaluate-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Coval Evaluation
+        uses: coval-ai/coval-github-action@v1
+        env:
+          COVAL_API_KEY: ${{ secrets.COVAL_API_KEY }}
+        with:
+          agent_id: "gk3jK9mPq2xRt5vW8yZaBc"  # Replace with your agent ID
+          persona_id: "hL4kL0nQr3ySt6vX9zAcDd"  # Replace with your persona ID
+          test_set_id: "aB1cD2eF"  # Replace with your test set ID

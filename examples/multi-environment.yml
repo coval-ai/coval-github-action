@@ -1,0 +1,42 @@
+# Multi-Environment Testing Example
+# Tests different agents based on the branch being pushed to
+
+name: Multi-Environment Evaluation
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - dev
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine Environment Configuration
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "agent_id=prodAgentId12345678" >> $GITHUB_OUTPUT
+            echo "test_set_id=prodTest" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "agent_id=stgAgentId123456789" >> $GITHUB_OUTPUT
+            echo "test_set_id=stgTest" >> $GITHUB_OUTPUT
+          else
+            echo "environment=development" >> $GITHUB_OUTPUT
+            echo "agent_id=devAgentId123456789" >> $GITHUB_OUTPUT
+            echo "test_set_id=devTest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Environment-Specific Evaluation
+        uses: coval-ai/coval-github-action@v1
+        env:
+          COVAL_API_KEY: ${{ secrets.COVAL_API_KEY }}
+        with:
+          agent_id: ${{ steps.env.outputs.agent_id }}
+          persona_id: "hL4kL0nQr3ySt6vX9zAcDd"
+          test_set_id: ${{ steps.env.outputs.test_set_id }}
+          metadata: '{"environment": "${{ steps.env.outputs.environment }}", "branch": "${{ github.ref_name }}", "commit": "${{ github.sha }}"}'

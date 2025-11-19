@@ -1,0 +1,50 @@
+# Advanced Configuration Example
+# Demonstrates custom metrics, iteration count, concurrency, and metadata
+
+name: Advanced Coval Evaluation
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  advanced-evaluation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Advanced Evaluation
+        id: coval
+        uses: coval-ai/coval-github-action@v1
+        env:
+          COVAL_API_KEY: ${{ secrets.COVAL_API_KEY }}
+        with:
+          agent_id: "gk3jK9mPq2xRt5vW8yZaBc"
+          persona_id: "hL4kL0nQr3ySt6vX9zAcDd"
+          test_set_id: "aB1cD2eF"
+          # Specify custom metrics to evaluate
+          metric_ids: '["iM5lM1oRs4zTu7wY0aBdEe", "jN6mN2pSt5aUv8xZ1bCeFf"]'
+          # Run each test case 3 times for reliability
+          iteration_count: 3
+          # Run 2 simulations concurrently
+          concurrency: 2
+          # Add custom metadata for tracking
+          metadata: '{"campaign": "q4_2025", "environment": "production", "commit": "${{ github.sha }}", "triggered_by": "${{ github.actor }}"}'
+          # Allow more time for longer test runs
+          max_wait_time: 900
+          # Check status every 45 seconds
+          check_interval: 45
+
+      - name: Comment Results on Commit
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const status = '${{ steps.coval.outputs.status }}';
+            const url = '${{ steps.coval.outputs.run_url }}';
+            const emoji = status === 'COMPLETED' ? '✓' : '✗';
+
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: `${emoji} Coval Evaluation ${status}\n\nView results: ${url}`
+            });
