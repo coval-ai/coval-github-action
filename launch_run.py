@@ -35,6 +35,10 @@ class CovalRunLauncher:
         self.check_interval = int(os.getenv("CHECK_INTERVAL", "30"))
         self.api_base_url = os.getenv("API_BASE_URL", "https://api.coval.dev/v1")
 
+        # Metric failure checking
+        self.fail_on_metric_id = os.getenv("FAIL_ON_METRIC_ID", "").strip() or None
+        self.fail_on_metric_value = os.getenv("FAIL_ON_METRIC_VALUE", "").strip() or None
+
         # API endpoints
         self.runs_endpoint = f"{self.api_base_url}/runs"
 
@@ -82,6 +86,12 @@ class CovalRunLauncher:
             raise ValueError(f"iteration_count must be between 1 and 10, got {self.iteration_count}")
         if not 1 <= self.concurrency <= 5:
             raise ValueError(f"concurrency must be between 1 and 5, got {self.concurrency}")
+
+        # Validate fail_on_metric inputs (both must be provided together)
+        if self.fail_on_metric_id and not self.fail_on_metric_value:
+            raise ValueError("fail_on_metric_value is required when fail_on_metric_id is provided")
+        if self.fail_on_metric_value and not self.fail_on_metric_id:
+            raise ValueError("fail_on_metric_id is required when fail_on_metric_value is provided")
 
     def _build_launch_request(self) -> Dict[str, Any]:
         """Build the LaunchRunRequest payload according to the v1 API schema."""
@@ -255,8 +265,6 @@ class CovalRunLauncher:
         print("✓ Run Completed Successfully")
         print(f"{'='*60}\n")
 
-        self._set_github_output("status", "COMPLETED")
-
         # Print results summary
         results = run.get("results", {})
         if results:
@@ -268,14 +276,26 @@ class CovalRunLauncher:
             metrics = results.get("metrics", {})
             if metrics:
                 print("\n  Metrics:")
-                for metric_name, stats in metrics.items():
-                    mean = stats.get("mean", 0)
-                    min_val = stats.get("min", 0)
-                    max_val = stats.get("max", 0)
-                    print(f"    {metric_name}:")
-                    print(f"      Mean: {mean:.3f}, Min: {min_val:.3f}, Max: {max_val:.3f}")
+                for metric_id, metric_data in metrics.items():
+                    metric_name = metric_data.get("metric_name", metric_id)
+                    if "mean" in metric_data:
+                        mean = metric_data.get("mean", 0)
+                        min_val = metric_data.get("min", 0)
+                        max_val = metric_data.get("max", 0)
+                        print(f"    {metric_name}:")
+                        print(f"      Mean: {mean:.3f}, Min: {min_val:.3f}, Max: {max_val:.3f}")
+                    else:
+                        values = metric_data.get("values", [])
+                        print(f"    {metric_name}: {len(values)} simulation values")
 
         print(f"\nView full results: https://app.coval.dev/runs/{run.get('run_id')}")
+
+        # Check for metric failures if configured
+        if self._check_metric_failure(run):
+            self._set_github_output("status", "COMPLETED_WITH_FAILURES")
+            raise SystemExit(1)
+
+        self._set_github_output("status", "COMPLETED")
 
     def _handle_failure(self, run: Dict[str, Any]):
         """Handle run failure."""
@@ -295,6 +315,80 @@ class CovalRunLauncher:
             print(f"Failed test cases: {failed}")
 
         raise SystemExit(1)
+
+    def _check_metric_failure(self, run: Dict[str, Any]) -> bool:
+        """
+        Check if any simulation has the failure value for the specified metric.
+
+        Returns:
+            bool: True if any simulation failed (has the failure value), False otherwise
+        """
+        if not self.fail_on_metric_id or not self.fail_on_metric_value:
+            return False
+
+        results = run.get("results", {})
+        metrics = results.get("metrics", {})
+
+        # Find the metric by ID
+        metric_data = metrics.get(self.fail_on_metric_id)
+        if not metric_data:
+            print(f"\nWarning: Metric ID '{self.fail_on_metric_id}' not found in results")
+            print(f"Available metric IDs: {list(metrics.keys())}")
+            return False
+
+        metric_name = metric_data.get("metric_name", self.fail_on_metric_id)
+        values = metric_data.get("values", [])
+
+        if not values:
+            print(f"\nWarning: No values found for metric '{metric_name}'")
+            return False
+
+        # Check each simulation's value
+        failed_simulations = []
+        fail_value = self.fail_on_metric_value
+
+        for value_entry in values:
+            sim_id = value_entry.get("simulation_output_id", "unknown")
+            value = value_entry.get("value")
+
+            is_match = False
+            if value is None:
+                is_match = False
+            elif isinstance(value, (int, float)):
+                try:
+                    is_match = float(value) == float(fail_value)
+                except (ValueError, TypeError):
+                    is_match = str(value).lower() == str(fail_value).lower()
+            else:
+                is_match = str(value).lower() == str(fail_value).lower()
+
+            if is_match:
+                failed_simulations.append({
+                    "simulation_output_id": sim_id,
+                    "value": value
+                })
+
+        if failed_simulations:
+            print(f"\n{'='*60}")
+            print("METRIC FAILURE CHECK FAILED")
+            print(f"{'='*60}")
+            print(f"\nMetric: {metric_name} (ID: {self.fail_on_metric_id})")
+            print(f"Failure Value: {self.fail_on_metric_value}")
+            print(f"\nFailed Simulations ({len(failed_simulations)} of {len(values)}):")
+
+            for fail in failed_simulations:
+                print(f"  - {fail['simulation_output_id']}: {fail['value']}")
+
+            # Set output with failed simulation IDs
+            failed_ids = [f["simulation_output_id"] for f in failed_simulations]
+            self._set_github_output("metric_failures", json.dumps(failed_ids))
+
+            return True
+
+        # No failures found
+        print(f"\n[Metric Check] All {len(values)} simulations passed for metric '{metric_name}'")
+        self._set_github_output("metric_failures", "[]")
+        return False
 
     def _set_github_output(self, name: str, value: str):
         """Set GitHub Actions output variable."""

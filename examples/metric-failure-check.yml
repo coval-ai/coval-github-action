@@ -1,0 +1,43 @@
+# Metric-Based Failure Detection Example
+# Fails CI if any simulation returns a specific metric value
+# Use case: Quality gate to catch incorrect agent behavior before merging
+
+name: Coval Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  evaluate-with-quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Evaluation with Metric Check
+        id: coval
+        uses: coval-ai/coval-github-action@v1
+        env:
+          COVAL_API_KEY: ${{ secrets.COVAL_API_KEY }}
+        with:
+          agent_id: "gk3jK9mPq2xRt5vW8yZaBc"      # Replace with your agent ID
+          persona_id: "hL4kL0nQr3ySt6vX9zAcDd"    # Replace with your persona ID
+          test_set_id: "aB1cD2eF"                  # Replace with your test set ID
+
+          # Include the metric in the run
+          metric_ids: '["83494c1be88a2c66f9659e"]'
+
+          # Quality Gate: Fail if ANY simulation returns "NO" for this metric
+          fail_on_metric_id: "83494c1be88a2c66f9659e"  # Replace with your metric ID
+          fail_on_metric_value: "NO"
+
+      - name: Report Success
+        if: success()
+        run: |
+          echo "All simulations passed the quality gate!"
+          echo "View results: ${{ steps.coval.outputs.run_url }}"
+
+      - name: Report Failures
+        if: failure()
+        run: |
+          echo "Quality gate failed!"
+          echo "Failed simulations: ${{ steps.coval.outputs.metric_failures }}"
+          echo "View results: ${{ steps.coval.outputs.run_url }}"

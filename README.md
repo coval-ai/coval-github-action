@@ -116,6 +116,8 @@ jobs:
 | `max_wait_time` | Maximum wait time in seconds | No | `600` |
 | `check_interval` | Status check interval in seconds | No | `30` |
 | `api_base_url` | Coval API base URL | No | `https://api.coval.dev/v1` |
+| `fail_on_metric_id` | Metric ID to check for failure conditions | No | - |
+| `fail_on_metric_value` | Value that indicates failure (e.g., "NO") | No | - |
 
 ### Environment Variables
 
@@ -130,6 +132,7 @@ jobs:
 | `run_id` | Unique identifier for the run | `8EktrIgaVxn9LfxkIynagX` |
 | `status` | Final run status | `COMPLETED` |
 | `run_url` | Dashboard URL for the run | `https://app.coval.dev/runs/...` |
+| `metric_failures` | JSON array of simulation IDs that failed metric check | `[]` |
 
 ### Using Outputs
 
@@ -155,6 +158,49 @@ jobs:
         body: `✓ Coval evaluation completed: ${{ steps.coval.outputs.run_url }}`
       })
 ```
+
+## Metric-Based Failure Detection
+
+You can configure the action to fail CI when specific metric conditions are met. This is useful for enforcing quality gates based on evaluation results.
+
+### Configuration
+
+| Input | Description |
+|-------|-------------|
+| `fail_on_metric_id` | The ID of the metric to check (found in Coval dashboard) |
+| `fail_on_metric_value` | The value that indicates failure (case-insensitive) |
+
+### Example: Fail on Incorrect Behavior
+
+```yaml
+- name: Run Evaluation with Quality Gate
+  uses: coval-ai/coval-github-action@v1
+  env:
+    COVAL_API_KEY: ${{ secrets.COVAL_API_KEY }}
+  with:
+    agent_id: "gk3jK9mPq2xRt5vW8yZaBc"
+    persona_id: "hL4kL0nQr3ySt6vX9zAcDd"
+    test_set_id: "aB1cD2eF"
+    metric_ids: '["83494c1be88a2c66f9659e"]'
+    fail_on_metric_id: "83494c1be88a2c66f9659e"
+    fail_on_metric_value: "NO"
+```
+
+### How It Works
+
+1. The evaluation run completes normally
+2. The action inspects the metric values for each simulation
+3. If **any** simulation has the specified failure value, the action:
+   - Prints which simulations failed
+   - Sets `metric_failures` output with the list of failed simulation IDs
+   - Exits with code 1, failing the CI pipeline
+4. If no simulations have the failure value, the action succeeds
+
+### Finding Your Metric ID
+
+1. Navigate to the Metrics page in Coval
+2. Click on the metric you want to use as a quality gate
+3. Copy the metric ID from the URL or details page
 
 ## API Reference
 

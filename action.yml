@@ -41,6 +41,12 @@ inputs:
     description: "Base URL for the Coval API"
     required: false
     default: "https://api.coval.dev/v1"
+  fail_on_metric_id:
+    description: "Metric ID to check for failure conditions. If any simulation has the fail_on_metric_value for this metric, the action will exit with code 1."
+    required: false
+  fail_on_metric_value:
+    description: "Value that indicates failure for the specified metric (e.g., 'NO'). Case-insensitive comparison."
+    required: false
 
 outputs:
   run_id:
@@ -52,6 +58,9 @@ outputs:
   run_url:
     description: "URL to view the run in Coval dashboard"
     value: ${{ steps.run-evaluation.outputs.run_url }}
+  metric_failures:
+    description: "JSON array of simulation IDs that failed the metric check (empty if none)"
+    value: ${{ steps.run-evaluation.outputs.metric_failures }}
 
 runs:
   using: "composite"
@@ -88,6 +97,8 @@ runs:
         MAX_WAIT_TIME: ${{ inputs.max_wait_time }}
         CHECK_INTERVAL: ${{ inputs.check_interval }}
         API_BASE_URL: ${{ inputs.api_base_url }}
+        FAIL_ON_METRIC_ID: ${{ inputs.fail_on_metric_id }}
+        FAIL_ON_METRIC_VALUE: ${{ inputs.fail_on_metric_value }}
       run: |
         echo "Launching Coval evaluation run..."
         python .coval-action/launch_run.py
