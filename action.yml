@@ -65,12 +65,6 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Checkout Coval Action
-      uses: actions/checkout@v4
-      with:
-        repository: coval-ai/coval-github-action
-        path: .coval-action
-
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -80,7 +74,7 @@ runs:
       shell: bash
       run: |
         python -m pip install --upgrade pip
-        pip install -r .coval-action/requirements.txt
+        pip install -r "$GITHUB_ACTION_PATH/requirements.txt"
 
     - name: Run Evaluation
       id: run-evaluation
@@ -101,10 +95,4 @@ runs:
         FAIL_ON_METRIC_VALUE: ${{ inputs.fail_on_metric_value }}
       run: |
         echo "Launching Coval evaluation run..."
-        python .coval-action/launch_run.py
-
-    - name: Cleanup
-      if: always()
-      shell: bash
-      run: |
-        rm -rf .coval-action
+        python "$GITHUB_ACTION_PATH/launch_run.py"
